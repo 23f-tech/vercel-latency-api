@@ -64,7 +64,7 @@ def calculate(regions, threshold):
             "avg_uptime": sum(uptimes) / len(uptimes),
             "breaches": sum(1 for x in latencies if x > threshold)
         })
-    return {"results": results}
+    return {"regions": results}
 
 class handler(BaseHTTPRequestHandler):
     def _headers(self, status=200):
