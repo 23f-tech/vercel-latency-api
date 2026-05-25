@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import math
 
@@ -48,6 +49,14 @@ DATA = [
     {"region":"amer","service":"payments","latency_ms":171.47,"uptime_pct":97.893,"timestamp":20250311},
     {"region":"amer","service":"payments","latency_ms":189.75,"uptime_pct":98.551,"timestamp":20250312},
 ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 @app.middleware("http")
 async def add_cors_headers(request: Request, call_next):
