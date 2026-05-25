@@ -71,6 +71,10 @@ async def options_handler(path: str):
 async def root():
     return make_response({"message": "POST endpoint is running"})
 
+@app.options("/")
+async def options_root():
+    return make_response({})
+
 @app.post("/")
 async def analytics(request: Request):
     body = await request.json()
