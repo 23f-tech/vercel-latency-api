@@ -1,16 +1,8 @@
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import math
 
 app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["POST", "OPTIONS"],
-    allow_headers=["*"],
-)
 
 DATA = [
     {"region":"apac","service":"analytics","latency_ms":213.35,"uptime_pct":98.529,"timestamp":20250301},
@@ -53,16 +45,31 @@ DATA = [
     {"region":"amer","service":"payments","latency_ms":189.75,"uptime_pct":98.551,"timestamp":20250312},
 ]
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
+}
+
+def make_response(data):
+    return JSONResponse(content=data, headers=CORS_HEADERS)
+
 def percentile(values, p):
     values = sorted(values)
-    if not values:
-        return None
     pos = (len(values) - 1) * p
     lower = math.floor(pos)
     upper = math.ceil(pos)
     if lower == upper:
         return values[int(pos)]
     return values[lower] + (values[upper] - values[lower]) * (pos - lower)
+
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    return make_response({})
+
+@app.get("/")
+async def root():
+    return make_response({"message": "POST endpoint is running"})
 
 @app.post("/")
 async def analytics(request: Request):
@@ -85,8 +92,4 @@ async def analytics(request: Request):
             "breaches": sum(1 for x in latencies if x > threshold)
         })
 
-    return {"results": results}
-
-@app.get("/")
-async def root():
-    return {"message": "POST endpoint is running"}
+    return make_response({"results": results})
