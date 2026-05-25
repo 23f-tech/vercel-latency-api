@@ -4,6 +4,12 @@ import math
 
 app = FastAPI()
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
+}
+
 DATA = [
     {"region":"apac","service":"analytics","latency_ms":213.35,"uptime_pct":98.529,"timestamp":20250301},
     {"region":"apac","service":"payments","latency_ms":153.26,"uptime_pct":97.904,"timestamp":20250302},
@@ -17,7 +23,6 @@ DATA = [
     {"region":"apac","service":"payments","latency_ms":208.86,"uptime_pct":97.379,"timestamp":20250310},
     {"region":"apac","service":"catalog","latency_ms":158.52,"uptime_pct":97.764,"timestamp":20250311},
     {"region":"apac","service":"analytics","latency_ms":140.95,"uptime_pct":98.104,"timestamp":20250312},
-
     {"region":"emea","service":"payments","latency_ms":133.97,"uptime_pct":99.18,"timestamp":20250301},
     {"region":"emea","service":"recommendations","latency_ms":137.69,"uptime_pct":99.138,"timestamp":20250302},
     {"region":"emea","service":"support","latency_ms":189.22,"uptime_pct":97.904,"timestamp":20250303},
@@ -30,7 +35,6 @@ DATA = [
     {"region":"emea","service":"support","latency_ms":128.76,"uptime_pct":99.403,"timestamp":20250310},
     {"region":"emea","service":"support","latency_ms":235.9,"uptime_pct":97.445,"timestamp":20250311},
     {"region":"emea","service":"checkout","latency_ms":103.77,"uptime_pct":98.245,"timestamp":20250312},
-
     {"region":"amer","service":"catalog","latency_ms":126.6,"uptime_pct":98.367,"timestamp":20250301},
     {"region":"amer","service":"support","latency_ms":113.98,"uptime_pct":98.843,"timestamp":20250302},
     {"region":"amer","service":"catalog","latency_ms":131.97,"uptime_pct":97.186,"timestamp":20250303},
@@ -45,14 +49,16 @@ DATA = [
     {"region":"amer","service":"payments","latency_ms":189.75,"uptime_pct":98.551,"timestamp":20250312},
 ]
 
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "*",
-}
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return JSONResponse(content={}, headers=CORS_HEADERS)
 
-def make_response(data):
-    return JSONResponse(content=data, headers=CORS_HEADERS)
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 def percentile(values, p):
     values = sorted(values)
@@ -63,17 +69,12 @@ def percentile(values, p):
         return values[int(pos)]
     return values[lower] + (values[upper] - values[lower]) * (pos - lower)
 
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    return make_response({})
-
 @app.get("/")
 async def root():
-    return make_response({"message": "POST endpoint is running"})
-
-@app.options("/")
-async def options_root():
-    return make_response({})
+    return JSONResponse(
+        content={"message": "POST endpoint is running"},
+        headers=CORS_HEADERS
+    )
 
 @app.post("/")
 async def analytics(request: Request):
@@ -96,4 +97,4 @@ async def analytics(request: Request):
             "breaches": sum(1 for x in latencies if x > threshold)
         })
 
-    return make_response({"results": results})
+    return JSONResponse(content={"results": results}, headers=CORS_HEADERS)
