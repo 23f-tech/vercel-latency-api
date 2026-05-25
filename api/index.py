@@ -1,15 +1,6 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from http.server import BaseHTTPRequestHandler
+import json
 import math
-
-app = FastAPI()
-
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "*",
-}
 
 DATA = [
     {"region":"apac","service":"analytics","latency_ms":213.35,"uptime_pct":98.529,"timestamp":20250301},
@@ -50,25 +41,6 @@ DATA = [
     {"region":"amer","service":"payments","latency_ms":189.75,"uptime_pct":98.551,"timestamp":20250312},
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
-
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return JSONResponse(content={}, headers=CORS_HEADERS)
-
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
-
 def percentile(values, p):
     values = sorted(values)
     pos = (len(values) - 1) * p
@@ -78,21 +50,8 @@ def percentile(values, p):
         return values[int(pos)]
     return values[lower] + (values[upper] - values[lower]) * (pos - lower)
 
-@app.get("/")
-async def root():
-    return JSONResponse(
-        content={"message": "POST endpoint is running"},
-        headers=CORS_HEADERS
-    )
-
-@app.post("/")
-async def analytics(request: Request):
-    body = await request.json()
-    regions = body.get("regions", [])
-    threshold = body.get("threshold_ms", 0)
-
+def calculate(regions, threshold):
     results = []
-
     for region in regions:
         rows = [r for r in DATA if r["region"] == region]
         latencies = [r["latency_ms"] for r in rows]
@@ -105,5 +64,38 @@ async def analytics(request: Request):
             "avg_uptime": sum(uptimes) / len(uptimes),
             "breaches": sum(1 for x in latencies if x > threshold)
         })
+    return {"results": results}
 
-    return JSONResponse(content={"results": results}, headers=CORS_HEADERS)
+class handler(BaseHTTPRequestHandler):
+    def _headers(self, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "*")
+        self.end_headers()
+
+    def do_OPTIONS(self):
+        self._headers(200)
+        self.wfile.write(b"{}")
+
+    def do_GET(self):
+        self._headers(200)
+        self.wfile.write(json.dumps({"message": "POST endpoint is running"}).encode())
+
+    def do_POST(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            raw_body = self.rfile.read(length).decode("utf-8")
+            body = json.loads(raw_body) if raw_body else {}
+
+            regions = body.get("regions", [])
+            threshold = body.get("threshold_ms", 0)
+
+            response = calculate(regions, threshold)
+            self._headers(200)
+            self.wfile.write(json.dumps(response).encode())
+
+        except Exception as e:
+            self._headers(500)
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
